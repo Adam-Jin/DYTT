@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import Orientation from 'react-native-orientation';
 import { BorderlessButton } from 'react-native-gesture-handler';
+import LinearGradient from 'react-native-linear-gradient';
 import Star from '../components/Star';
 import Loading from '../components/Loading';
 import CommentList from '../components/CommentList';
@@ -26,7 +27,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import IconE from 'react-native-vector-icons/Entypo';
 import IconM from 'react-native-vector-icons/MaterialIcons';
 import Video from '../components/Video';
-import { GetVideoInfo,GetSameVideo,GetDoubanInterests } from '../../util/api';
+import { GetVideoInfo,GetSameVideo,GetDoubanInterests,GetPlayUrl } from '../../util/api';
 import { Store } from '../../util/store';
 
 const { UIManager } = NativeModules;
@@ -46,12 +47,12 @@ const Appbar = ({themeColor,isFull,scrollTop,name,hasFollow,isRender,setFollow,g
         <BorderlessButton activeOpacity={.8} style={styles.btn} onPress={isRender?setFollow:null} >
             <IconM name={hasFollow?'favorite':'favorite-border'} size={20} color='#fff' />
         </BorderlessButton>
-        <Animated.View style={[styles.fullcon, { backgroundColor: themeColor }, {
+        <Animated.View style={[styles.fullcon, {
             opacity: scrollTop.interpolate({
                 inputRange: [$.STATUS_HEIGHT, $.STATUS_HEIGHT + 150],
                 outputRange: [0, 1]
             })
-        }]} />
+        }]} ><LinearGradient colors={themeColor.length>1?themeColor:[...themeColor,...themeColor]} start={{x: 0, y: 0}} end={{x: 1, y: 0}} style={styles.fullcon} /></Animated.View>
     </View>
 )
 
@@ -65,12 +66,14 @@ const MovieInfo = ({movieInfo,themeColor,isPlaying,onPlay,isRender}) => (
         </View>
         <View style={[styles.postertext,isPlaying&&{height:($.WIDTH-40)*9/16}]}>
             <Text style={[styles.title, { color: themeColor }]}>{movieInfo.Name||'正在加载...'}</Text>
-            <Star style={styles.score} score={movieInfo.Score} themeColor={themeColor} />
+            {
+                //<Star style={styles.score} score={movieInfo.Score} themeColor={themeColor} />
+            }
             {
                 movieInfo.MovieTitle ? <Text style={styles.status}>{movieInfo.MovieTitle}</Text>:null
             }
             <Text style={styles.subtitle}>{movieInfo.Tags}</Text>
-            <Text style={styles.subtitle}>{movieInfo.ReleaseDate} 上映</Text>
+            <Text style={styles.subtitle}>{movieInfo.ReleaseDate} 更新</Text>
         </View>
     </View>
 )
@@ -202,7 +205,7 @@ class MovieSource extends PureComponent {
                         onPress={this.changeDir}
                         style={styles.view_more}
                     >
-                        <Text style={styles.view_moretext}>{dir?'正常':'最新'}</Text>
+                        <Text style={styles.view_moretext}>{dir?'正常':'倒序'}</Text>
                         <Icon name={dir ? 'chevron-right' : 'chevron-left'} size={16} color={themeColor} />
                     </TouchableOpacity>
                 }
@@ -210,21 +213,26 @@ class MovieSource extends PureComponent {
                 {
                     isRender
                         ?
-                        <FlatList
-                            ref={(ref) => this.flatlist = ref}
-                            style={styles.sourcelist}
-                            showsHorizontalScrollIndicator={false}
-                            ListFooterComponent={this.renderFooter}
-                            horizontal={true}
-                            ItemSeparatorComponent={() => <View style={{width:10}} />}
-                            //initialNumToRender={20}
-                            getItemLayout={this.getItemLayout}
-                            removeClippedSubviews={false}
-                            data={source}
-                            extraData={sourceId}
-                            keyExtractor={(item, index) => item.ID.toString()}
-                            renderItem={this.renderItem}
-                        />
+                        (
+                            source.length>0?
+                            <FlatList
+                                ref={(ref) => this.flatlist = ref}
+                                style={styles.sourcelist}
+                                showsHorizontalScrollIndicator={false}
+                                ListFooterComponent={this.renderFooter}
+                                horizontal={true}
+                                ItemSeparatorComponent={() => <View style={{width:10}} />}
+                                //initialNumToRender={20}
+                                getItemLayout={this.getItemLayout}
+                                removeClippedSubviews={false}
+                                data={source}
+                                extraData={sourceId}
+                                keyExtractor={(item, index) => item.ID.toString()}
+                                renderItem={this.renderItem}
+                            />
+                            :
+                            <Text style={styles.empty}>╮(╯﹏╰）╭ 暂无资源</Text>
+                        )
                         :
                         <Loading size='small' text='' themeColor={themeColor} />
                 }
@@ -399,10 +407,12 @@ export default class MovieDetail extends PureComponent {
                 this.lastPlayTime = historyItem.currentTime-3;
                 _sourceId = historyItem.sourceId;
             }else{
-                _sourceId = data.MoviePlayUrls[0].ID;
+                _sourceId = data.MoviePlayUrls[0]?data.MoviePlayUrls[0].ID:null;
             }
-            const item = data.MoviePlayUrls.find(el=>el.ID==_sourceId||el.Name==historyItem.sourceName);
-            this.PlayUrl = item.PlayUrl;
+            const item = data.MoviePlayUrls.find(el=>el.ID==_sourceId||el.Name==historyItem.sourceName)||{};
+            if(item.ID){
+                this.PlayUrl = await GetPlayUrl(item.PlayUrl);
+            }
             this.setState({
                 movieInfo:data,
                 sourceName:item.Name,
@@ -450,14 +460,14 @@ export default class MovieDetail extends PureComponent {
         LayoutAnimation.easeInEaseOut();
     }
 
-    onPlay = (ID,bool) => {
+    onPlay = async (ID,bool) => {
         if(bool){
             //跳转
             const { settings:{allowMoblieNetwork} } = this.context;
             this.lastPlayTime = null;
             const {movieInfo} = this.state;
             const item = movieInfo.MoviePlayUrls.find(el=>el.ID==ID);
-            this.PlayUrl = item.PlayUrl;
+            this.PlayUrl = await GetPlayUrl(item.PlayUrl);
             this.setState({
                 sourceId:item.ID,
                 sourceName:item.Name,
@@ -616,7 +626,7 @@ export default class MovieDetail extends PureComponent {
                         resizeMode='cover'
                         blurRadius={3.5}
                         source={{ uri: movieInfo.Cover||'http' }}
-                        style={[styles.bg_place, {backgroundColor: themeColor,
+                        style={[styles.bg_place, {backgroundColor: themeColor[0],
                             transform: [{
                                 scale: this.scrollTop.interpolate({
                                     inputRange: [0, $.STATUS_HEIGHT + 50],
@@ -632,7 +642,7 @@ export default class MovieDetail extends PureComponent {
                             })
                         }]
                     }]}>
-                        <MovieInfo movieInfo={movieInfo} themeColor={themeColor} onPlay={this.onPlay} isPlaying={isPlaying} isRender={isRender} />
+                        <MovieInfo movieInfo={movieInfo} themeColor={themeColor[0]} onPlay={this.onPlay} isPlaying={isPlaying} isRender={isRender} />
                         <Animated.View style={[styles.videoCon, {
                             zIndex: this.scrollRotate.interpolate({
                                 inputRange: [0,.499,.501, 1],
@@ -651,21 +661,27 @@ export default class MovieDetail extends PureComponent {
                                 style={styles.backgroundVideo}
                                 seekTime={seekTime}
                                 onfullChanged={this.onfullChanged}
-                                themeColor={themeColor}
+                                themeColor={themeColor[0]}
                             />
                             <View pointerEvents={(isWiFi||!allowMoblieNetwork)?'none':'auto'} style={[styles.fullScreen,styles.center,{backgroundColor:'rgba(0,0,0,.5)'},(isWiFi||!allowMoblieNetwork)&&{opacity:0}]}>
                                 <Text style={styles.maskTip}>当前正处于移动网络环境</Text>
-                                <TouchableOpacity onPress={this.allowPlay} activeOpacity={.8} style={[styles.maskButton,{backgroundColor:themeColor}]}><Text style={styles.maskButtonText}>继续播放?</Text></TouchableOpacity>
+                                <TouchableOpacity onPress={this.allowPlay} activeOpacity={.8}>
+                                    <LinearGradient colors={themeColor.length>1?themeColor:[...themeColor,...themeColor]} start={{x: 0, y: 0}} end={{x: 1, y: 0}} style={styles.maskButton}>
+                                        <Text style={styles.maskButtonText}>继续播放?</Text>
+                                    </LinearGradient>
+                                </TouchableOpacity>
                             </View>
                             <TouchableOpacity style={[styles.closebtn,isFull&&{ opacity:0, top:-50 }]} onPress={this.onClose} >
                                 <Icon name='x' size={20} color='#fff' />
                             </TouchableOpacity>
                         </Animated.View>
                     </Animated.View>
-                    <MovieSource ref={(ref) => this.moviesource = ref} source={movieInfo.MoviePlayUrls} sourceId={sourceId} onPlay={this.onPlay} isRender={isRender} themeColor={themeColor} />
-                    <MovieSummary summary={movieInfo.Introduction} isRender={isRender} themeColor={themeColor} />
-                    <MovieSame movieInfo={movieInfo} isRender={isRender} themeColor={themeColor} navigation={navigation} />
-                    <MovieComments DBID={movieInfo.DBID} isRender={isRender} themeColor={themeColor} navigation={navigation} />
+                    <MovieSource ref={(ref) => this.moviesource = ref} source={movieInfo.MoviePlayUrls} sourceId={sourceId} onPlay={this.onPlay} isRender={isRender} themeColor={themeColor[0]} />
+                    <MovieSummary summary={movieInfo.Introduction} isRender={isRender} themeColor={themeColor[0]} />
+                    <MovieSame movieInfo={movieInfo} isRender={isRender} themeColor={themeColor[0]} navigation={navigation} />
+                    {
+                        //<MovieComments DBID={movieInfo.DBID} isRender={isRender} themeColor={themeColor[0]} navigation={navigation} />
+                    }
                 </Animated.ScrollView>
             </View>
         );

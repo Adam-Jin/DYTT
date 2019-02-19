@@ -21,12 +21,13 @@ import {
     View,
 } from 'react-native';
 import { BorderlessButton } from 'react-native-gesture-handler';
+import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Feather';
 import Loading from '../components/Loading';
-import MovieList from '../components/MovieList';
+import SearchList from '../components/SearchList';
 import AnimatedView from '../components/AnimatedView';
 import Storage from '../../util/storage';
-import { GetPageList } from '../../util/api';
+import { GetSearch } from '../../util/api';
 
 const { UIManager } = NativeModules;
 
@@ -34,7 +35,7 @@ class SearchResult extends PureComponent {
 
     page = 1;
 
-    pageSize = 36;
+    pageSize = 5;
 
     state = {
         data: [],
@@ -66,18 +67,18 @@ class SearchResult extends PureComponent {
     }
 
     getData = async () => {
-        const data = await GetPageList({ SearchKey: this.keywords, pageIndex: this.page, pageSize: this.pageSize });
+        const data = await GetSearch({ SearchKey: this.keywords, pageIndex: this.page, pageSize: this.pageSize });
         if( this.mounted ){
             LayoutAnimation.easeInEaseOut();
-            this.setState({
-                data: [...this.state.data, ...data],
-                isRender: true,
-            })
-            if (data.length < this.pageSize) {
+            if (data.isEnd) {
                 this.setState({
                     isEnding: true
                 })
             } else {
+                this.setState({
+                    data: [...this.state.data, ...data.list],
+                    isRender: true,
+                })
                 this.page = this.page + 1;
             }
         }
@@ -96,7 +97,7 @@ class SearchResult extends PureComponent {
             <AnimatedView style={[styles.content, styles.bg, styles.full]}>
                 {
                     isRender ?
-                        <MovieList style={{paddingHorizontal:5}} isRender={true} isEnding={isEnding} data={data} navigation={navigation} themeColor={themeColor} onEndReached={this.loadMore} />
+                        <SearchList isRender={true} isEnding={isEnding} data={data} navigation={navigation} themeColor={themeColor} onEndReached={this.loadMore} />
                         :
                         <Loading size='small' text='正在努力搜索中...' themeColor={themeColor} />
                 }
@@ -217,7 +218,7 @@ export default class Search extends PureComponent {
             this.addHistory(keywords);
             this.searchcon && this.searchcon.reSearch(keywords);
         } else {
-            ToastAndroid.show('请输入内容!', ToastAndroid.SHORT);
+            ToastAndroid.show('请输入点什么吧~', ToastAndroid.SHORT);
         }
     }
 
@@ -270,7 +271,7 @@ export default class Search extends PureComponent {
         const { isSearch, searchList, isRender, keywords } = this.state;
         return (
             <View style={[styles.content, styles.bg]}>
-                <View style={[styles.top, { backgroundColor: themeColor }]}>
+                <LinearGradient colors={themeColor.length>1?themeColor:[...themeColor,...themeColor]} start={{x: 0, y: 0}} end={{x: 1, y: 0}}  style={styles.top}>
                     <BorderlessButton
                         activeOpacity={.8}
                         style={styles.btn}
@@ -282,11 +283,11 @@ export default class Search extends PureComponent {
                         <TextInput
                             style={styles.searchtext}
                             value={keywords}
-                            selectionColor={themeColor}
+                            selectionColor={themeColor[0]}
                             underlineColorAndroid='transparent'
                             onSubmitEditing={this.onSubmit}
                             onChangeText={this.onChange}
-                            placeholder='搜索一下吧~'
+                            placeholder='搜索影片、演员~'
                             returnKeyLabel='搜索'
                             placeholderTextColor='#909090'
                         />
@@ -298,12 +299,12 @@ export default class Search extends PureComponent {
                     >
                         <Icon name='search' size={20} color={'#fff'} />
                     </BorderlessButton>
-                </View>
+                </LinearGradient>
                 <View style={styles.content}>
-                    <SearchHistory onSubmit={this.onSubmit} themeColor={themeColor} isRender={isRender} searchList={searchList} removeHistory={this.removeHistory} />
+                    <SearchHistory onSubmit={this.onSubmit} themeColor={themeColor[0]} isRender={isRender} searchList={searchList} removeHistory={this.removeHistory} />
                     {
                         isSearch &&
-                        <SearchResult ref={node => this.searchcon = node} keywords={keywords} navigation={navigation} themeColor={themeColor} />
+                        <SearchResult ref={node => this.searchcon = node} keywords={keywords} navigation={navigation} themeColor={themeColor[0]} />
                     }
                 </View>
             </View>
